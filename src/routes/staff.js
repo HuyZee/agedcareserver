@@ -113,31 +113,38 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// PATCH - Partially update a staff member
-router.patch('/:id', async (req, res) => {
+// PATCH - Change password for a staff member
+router.patch('/:id/change-password', async (req, res) => {
   const { id } = req.params;
-  const updateData = { ...req.body };
-
-  // Optionally handle password updates
-  if (updateData.password) {
-    updateData.password = await bcrypt.hash(updateData.password, 10);
-  }
-
-  // Handle date conversion for date_of_birth
-  if (updateData.date_of_birth) {
-    updateData.date_of_birth = convertToDate(updateData.date_of_birth);
-  }
+  const { oldPassword, newPassword } = req.body;
 
   try {
-    const updatedStaff = await prisma.staff.update({
+    const staff = await prisma.staff.findUnique({
       where: { staff_id: parseInt(id) },
-      data: updateData
     });
-    res.json(updatedStaff);
+
+    if (!staff) {
+      return res.status(404).json({ success: false, message: 'Staff member not found' });
+    }
+
+    const isOldPasswordValid = await bcrypt.compare(oldPassword, staff.password);
+    if (!isOldPasswordValid) {
+      return res.status(401).json({ success: false, message: 'Old password is incorrect' });
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.staff.update({
+      where: { staff_id: parseInt(id) },
+      data: { password: hashedNewPassword },
+    });
+
+    res.json({ success: true, message: 'Password changed successfully' });
   } catch (error) {
-    console.error('Error partially updating staff member:', error);
-    res.status(500).json({ error: 'Failed to partially update staff member' });
+    console.error('Error changing password:', error);
+    res.status(500).json({ success: false, message: 'Failed to change password' });
   }
 });
+
 
 module.exports = router;
